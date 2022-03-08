@@ -1,5 +1,0 @@
-function [res] = A_ij(delta_p_ij, params, i, j)
-res = zeros(1, params.n * 2);
-res(2 * (i - 1) : 2 * (i - 1) + 1)
-end
-
