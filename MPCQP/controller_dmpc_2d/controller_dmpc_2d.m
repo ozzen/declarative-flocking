@@ -1,0 +1,62 @@
+function [a, fit_val, exit_flag, prev_sol, history] = controller_dmpc_2d(pos, vel, past_vel, params, opt)
+%% controller_dmpc_2d - Run MPC controller and return first action
+% Non-liear constraints passed to fmincon as function handle. 
+% like this: 
+%     x = fmincon(@myfun,x0,A,b,Aeq,beq,lb,ub,@mycon)
+% Input:
+%   - pos          % 2 x n - state of the flock 
+%   - vel          % 2 x n - state of the flock 
+%   - params       % parameters
+
+% Output:
+%   - a            % 2 x n - The sequence of control action over the horizon 
+%   - fit_val      % cost for the optimal sequence of accelerations.
+% Usama Mehmood - Jan 2020
+%% OutFunction
+% Set up shared variables with out_function
+history.x = [];
+history.fval = [];
+
+opt.OutputFcn = @out_function;
+
+%% Optimization
+    lb = -params.amax * ones(2*params.h,1);
+    ub = params.amax * ones(2*params.h,1);
+
+%     u_init = [init_point(2*params.n+1:end); (params.amax/sqrt(2)) * rand(2*params.n,1)];
+%     u_init = zeros(2 * params.n * params.h, 1);
+    u_init = 2 * rand(2 * params.h, 1) - 1;
+    
+    
+%     rng default % For reproducibility
+%     gs = GlobalSearch;
+%     cost = @(u)cost_sum(u, pos, vel, params);
+%     constraint = @(u)constraints(u, params);
+%     problem = createOptimProblem('fmincon','x0',u_init,...
+%     'objective',cost,'lb',lb,'ub',ub, 'nonlcon', constraint, 'options', opt);
+%     [u, fit_val] = run(gs,problem);
+%     exit_flag = 0;
+    pos = [pos zeros(2, params.n - size(pos,2))];
+    vel = [vel zeros(2, params.n - size(vel,2))];
+
+    [u, fit_val, exit_flag] = fmincon(@(u)cost_sum(u, pos, vel, params),u_init,[],[],[],[],lb,ub,@(u)constraints(u, params),opt);
+%     [u, fit_val, exit_flag] = multi_start(pos, vel, params, opt, 3);
+
+%% Solution is processed
+    a_h = u2acc(u, params);
+    a = a_h(:,1);
+    a = trim_vec(a, params.amax);
+    prev_sol = u;
+    
+%% Function to collect the optimizers history. Used in plotting the fval.
+    function stop = out_function(x,optimValues,state)
+        stop = false;
+        switch state
+            case 'iter'
+                history.fval = [history.fval; optimValues.fval];
+                history.x = [history.x; x];
+            otherwise
+        end
+    end
+end
+
